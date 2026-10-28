@@ -3,7 +3,7 @@ const express = require("express");
 const pool = require("./config/db");
 const datacenterRoutes = require("./routes/datacenterRoutes");
 // const clientRoutes = require("./routes/clientRoutes");
-// const offreRoutes = require("./routes/offreRoutes");
+const offreRoutes = require("./routes/offreRoutes");
 // const abonnementRoutes = require("./routes/abonnementRoutes");
 // const serveurRoutes = require("./routes/serveurRoutes");
 // const ticketRoutes = require("./routes/ticketRoutes");
@@ -14,7 +14,7 @@ app.use(express.json());
 
 app.use("/api/datacenters", datacenterRoutes);
 // app.use("/api/clients", clientRoutes);
-// app.use("/api/offres", offreRoutes);
+app.use("/api/offres", offreRoutes);
 // app.use("/api/abonnements", abonnementRoutes);
 // app.use("/api/serveurs", serveurRoutes);
 // app.use("/api/tickets", ticketRoutes);
