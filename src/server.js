@@ -13,6 +13,7 @@ const ticketRoutes = require("./routes/ticketRoutes");
 const serveurRoutes = require("./routes/serveurRoutes");
 // const ticketRoutes = require("./routes/ticketRoutes");
 const technicienRoutes = require("./routes/technicienRoutes");
+const dashboardRoutes = require("./routes/dashboardRoutes");
 
 //creer le serveur 
 const app = express();
@@ -31,6 +32,7 @@ app.use("/api/tickets", ticketRoutes);
 app.use("/api/serveurs", serveurRoutes);
 // app.use("/api/tickets", ticketRoutes);
 app.use("/api/techniciens", technicienRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 //dans le cas ou aucune route ne corresp
 app.use((req, res) => {
