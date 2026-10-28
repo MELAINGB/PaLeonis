@@ -10,34 +10,36 @@ const PG_ERRORS = {
   "22001": [400, "TROP_LONG", "Une valeur dépasse la longueur autorisée"],
 };
 
+// Erreur "métier" avec un code HTTP, lancée depuis un modèle (ex : aucun serveur libre -> 409)
 class HttpError extends Error {
-  constructor(status, code, message) {
+  constructor(status, message) {
     super(message);
     this.status = status;
-    this.code = code;
   }
 }
 
 function notFound(req, res) {
-  res.status(404).json({
-    erreur: { code: "ROUTE_INCONNUE", message: `Route ${req.method} ${req.originalUrl} inexistante` },
-  });
+  res.status(404).json({ erreur: `Route ${req.method} ${req.originalUrl} inexistante` });
 }
 
 function errorHandler(err, req, res, next) {
   if (err instanceof HttpError) {
-    return res.status(err.status).json({ erreur: { code: err.code, message: err.message } });
+    return res.status(err.status).json({ erreur: err.message });
   }
   if (err.type === "entity.parse.failed") {
-    return res.status(400).json({ erreur: { code: "JSON_INVALIDE", message: "Le body n'est pas un JSON valide" } });
+    return res.status(400).json({ erreur: "Le body n'est pas un JSON valide" });
+  }
+  // Clé étrangère sur un DELETE : la ligne est encore utilisée ailleurs (ex. RG8) -> 409
+  if (err.code === "23503" && req.method === "DELETE") {
+    return res.status(409).json({ erreur: "Suppression impossible : la ressource est encore utilisée" });
   }
   const pg = PG_ERRORS[err.code];
   if (pg) {
     const [status, code, message] = pg;
-    return res.status(status).json({ erreur: { code, message, detail: err.detail ?? undefined } });
+    return res.status(status).json({ erreur: message });
   }
   console.error(err);
-  res.status(500).json({ erreur: { code: "ERREUR_SERVEUR", message: "Erreur interne du serveur" } });
+  res.status(500).json({ erreur: "Erreur interne du serveur" });
 }
 
 module.exports = { errorHandler, notFound, HttpError };
