@@ -18,5 +18,17 @@ async function getById(req, res, next) {
     }
 }
 
-module.exports = { getAll, getById }
+async function create(req, res, next) {
+    try {
+        if (!req.body.nom || !req.body.type || !req.body.prix || !req.body.description){
+            return res.status(400).json({ erreur: "Champs manquant" });
+        }
+        const offre = await Offre.create(req.body);
+        res.status(201).json(offre);
+    } catch(err) {
+        next(err);
+    }
+}
+
+module.exports = { getAll, getById, create }
 
