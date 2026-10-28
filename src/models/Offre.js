@@ -19,6 +19,23 @@ class Offre {
         );
         return rows[0];
     }
+
+    static async update(id, data) {
+    const { nom, type, prix, description } = data;
+    const { rows } = await pool.query(
+        "UPDATE OFFRE SET nom=$1, type=$2, prix=$3, description=$4 WHERE id_offre=$5 RETURNING *",
+        [nom, type, prix, description, id]
+    );
+    return rows[0] ?? null;
+    }
+
+    static async delete(id) {
+        const { rows } = await pool.query(
+            "DELETE FROM OFFRE WHERE id_offre=$1 RETURNING *",
+            [id]
+        );
+        return rows[0] ?? null;
+    }
 }
 
 module.exports = Offre;
