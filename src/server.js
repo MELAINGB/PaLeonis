@@ -6,7 +6,7 @@ const datacenterRoutes = require("./routes/datacenterRoutes");
 const offreRoutes = require("./routes/offreRoutes");
 // const abonnementRoutes = require("./routes/abonnementRoutes");
 // const serveurRoutes = require("./routes/serveurRoutes");
-// const ticketRoutes = require("./routes/ticketRoutes");
+const ticketRoutes = require("./routes/ticketRoutes");
 // const technicienRoutes = require("./routes/technicienRoutes");
 
 const app = express();
@@ -17,7 +17,7 @@ app.use("/api/datacenters", datacenterRoutes);
 app.use("/api/offres", offreRoutes);
 // app.use("/api/abonnements", abonnementRoutes);
 // app.use("/api/serveurs", serveurRoutes);
-// app.use("/api/tickets", ticketRoutes);
+app.use("/api/tickets", ticketRoutes);
 // app.use("/api/techniciens", technicienRoutes);
 
 app.use((err, req, res, next) => {
