@@ -4,7 +4,7 @@ require("dotenv").config();
 //recup express, la config de la bd et le routes dans data...
 const express = require("express");
 const datacenterRoutes = require("./routes/datacenterRoutes");
-// const clientRoutes = require("./routes/clientRoutes");
+const clientRoutes = require("./routes/clientRoutes");
 // const offreRoutes = require("./routes/offreRoutes");
 // const abonnementRoutes = require("./routes/abonnementRoutes");
 // const serveurRoutes = require("./routes/serveurRoutes");
@@ -19,7 +19,7 @@ app.use(express.json());
 
 //prefix de chauqe requete  pour le groupe datacenterRoutes
 app.use("/api/datacenters", datacenterRoutes);
-// app.use("/api/clients", clientRoutes);
+app.use("/api/clients", clientRoutes);
 // app.use("/api/offres", offreRoutes);
 // app.use("/api/abonnements", abonnementRoutes);
 // app.use("/api/serveurs", serveurRoutes);
