@@ -14,7 +14,7 @@ async function getById(req, res, next) {
     if (!datacenter) return res.status(404).json({ erreur: "Datacenter introuvable" });
     res.status(200).json(datacenter);
   } catch (err) {
-    next(err);
+    next(err)
   }
 }
 
