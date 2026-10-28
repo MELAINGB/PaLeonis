@@ -2,7 +2,7 @@ const Offre = require("../models/Offre");
 
 async function getAll(req, res, next) {
     try {
-        res.status(200).json(await Offre.findAll());
+        res.status(200).json(await Offre.findAll(req.query));
     } catch(err){
         next(err)
     }
@@ -20,8 +20,10 @@ async function getById(req, res, next) {
 
 async function create(req, res, next) {
     try {
-        if (!req.body.nom || !req.body.type || !req.body.prix || !req.body.description){
-            return res.status(400).json({ erreur: "Champs manquant" });
+        const { nom, categorie, prix_mensuel_ht } = req.body || {};
+        // prix_mensuel_ht peut valoir 0, donc on vérifie qu'il est présent et pas seulement "vrai"
+        if (!nom || !categorie || prix_mensuel_ht === undefined) {
+            return res.status(400).json({ erreur: "nom, categorie et prix_mensuel_ht sont obligatoires" });
         }
         const offre = await Offre.create(req.body);
         res.status(201).json(offre);
@@ -32,8 +34,9 @@ async function create(req, res, next) {
 
 async function update(req, res, next) {
     try {
-        if (!req.body.nom || !req.body.type || !req.body.prix || !req.body.description){
-            return res.status(400).json({ erreur: "Champs manquant" });
+        const { nom, categorie, prix_mensuel_ht } = req.body || {};
+        if (!nom || !categorie || prix_mensuel_ht === undefined) {
+            return res.status(400).json({ erreur: "nom, categorie et prix_mensuel_ht sont obligatoires" });
         }
         const offre = await Offre.update(req.params.id, req.body);
         if (!offre) return res.status(404).json({ erreur: "Offre non trouvée" });
@@ -43,17 +46,14 @@ async function update(req, res, next) {
     }
 }
 
-async function deleteOffre(req, res, next) {
+async function retirer(req, res, next) {
     try {
-        const id = parseInt(req.params.id);
-        if (isNaN(id)) return res.status(400).json({ erreur: "ID invalide" });
-        const offre = await Offre.delete(id);
+        const offre = await Offre.retirer(req.params.id);
         if (!offre) return res.status(404).json({ erreur: "Offre non trouvée" });
-        res.status(200).json({ message: "Offre supprimée" });
+        res.status(200).json(offre);
     } catch(err) {
         next(err);
     }
 }
 
-module.exports = { getAll, getById, create, update, delete: deleteOffre };
-
+module.exports = { getAll, getById, create, update, retirer };

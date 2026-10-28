@@ -18,12 +18,12 @@ async function getById(req, res, next){
     }
 }
 
-
+// POST /api/tickets
 async function create(req, res, next){
     try {
-        const { sujet, id_client, id_serveur, date_ouverture, date_fermeture, priorite, statut } = req.body;
-        if (!sujet || !id_client || !id_serveur || !date_ouverture || !date_fermeture || !priorite || !statut){
-            return res.status(400).json({ erreur: "Champs manquant" });
+        const { id_client, sujet, description } = req.body || {};
+        if (!id_client || !sujet || !description){
+            return res.status(400).json({ erreur: "id_client, sujet et description sont obligatoires" });
         }
         const ticket = await Ticket.create(req.body);
         res.status(201).json(ticket);
@@ -32,13 +32,13 @@ async function create(req, res, next){
     }
 }
 
-async function update(req, res, next){
+// PATCH /api/tickets/:id/assignation
+async function assigner(req, res, next){
     try {
-        const { sujet, id_client, id_serveur, date_ouverture, date_fermeture, priorite, statut } = req.body;
-        if (!sujet || !id_client || !id_serveur || !date_ouverture || !date_fermeture || !priorite || !statut){
-            return res.status(400).json({ erreur: "Champs manquant" });
-        }
-        const ticket = await Ticket.update(req.params.id, req.body);
+        const { id_technicien } = req.body || {};
+        if (!id_technicien) return res.status(400).json({ erreur: "id_technicien est obligatoire" });
+
+        const ticket = await Ticket.assigner(req.params.id, id_technicien);
         if(!ticket) return res.status(404).json({ erreur: "Ticket non trouvé"});
         res.status(200).json(ticket);
     } catch(err) {
@@ -46,11 +46,32 @@ async function update(req, res, next){
     }
 }
 
+// PATCH /api/tickets/:id/statut
+async function changerStatut(req, res, next){
+    try {
+        const { statut } = req.body || {};
+        if (!statut) return res.status(400).json({ erreur: "statut est obligatoire" });
+
+        const ticket = await Ticket.changerStatut(req.params.id, statut);
+        if(!ticket) return res.status(404).json({ erreur: "Ticket non trouvé"});
+        res.status(200).json(ticket);
+    } catch(err) {
+        next(err);
+    }
+}
+
+// GET /api/techniciens/:id/tickets
+async function getByTechnicien(req, res, next){
+    try {
+        res.status(200).json(await Ticket.findByTechnicien(req.params.id));
+    } catch(err) {
+        next(err);
+    }
+}
+
 async function deleteTicket(req, res, next){
     try {
-        const id = parseInt(req.params.id);
-        if (isNaN(id)) return res.status(400).json({ erreur: "ID invalide" });
-        const ticket = await Ticket.delete(id);
+        const ticket = await Ticket.delete(req.params.id);
         if(!ticket) return res.status(404).json({ erreur: "Ticket non trouvé"});
         res.status(200).json({ message: "Ticket supprimé"});
     } catch(err) {
@@ -58,4 +79,4 @@ async function deleteTicket(req, res, next){
     }
 }
 
-module.exports = { getAll, getById, create, update, delete: deleteTicket };
+module.exports = { getAll, getById, create, assigner, changerStatut, getByTechnicien, delete: deleteTicket };
