@@ -1,89 +1,62 @@
 const pool = require("../config/db");
 const { HttpError } = require("../middlewares/errorHandler");
 
-const SELECT_ABONNEMENT = `
-  SELECT a.id_abonnement, a.date_debut, a.date_fin, a.statut,
-         a.prix_applique::float AS prix_applique,
-         a.id_client, a.id_offre, o.nom AS offre, o.categorie,
-         s.id_serveur, s.nom_hote, host(s.adresse_ip) AS adresse_ip,
-         d.id_datacenter, d.nom AS datacenter
-  FROM abonnement a
-  JOIN offre o           ON o.id_offre = a.id_offre
-  LEFT JOIN serveur s    ON s.id_abonnement = a.id_abonnement
-  LEFT JOIN datacenter d ON d.id_datacenter = s.id_datacenter`;
-
 class Abonnement {
-  static async findById(id, conn = pool) {
-    const { rows } = await conn.query(`${SELECT_ABONNEMENT} WHERE a.id_abonnement = $1`, [id]);
-    return rows[0] ?? null;
-  }
-
-  static async findByClient(idClient) {
+  static async findById(id) {
     const { rows } = await pool.query(
-      `${SELECT_ABONNEMENT} WHERE a.id_client = $1 ORDER BY a.date_debut DESC, a.id_abonnement DESC`,
-      [idClient]
+      `SELECT a.*, o.nom AS offre, o.categorie, s.nom_hote AS serveur
+       FROM abonnement a
+       JOIN offre o ON o.id_offre = a.id_offre
+       LEFT JOIN serveur s ON s.id_abonnement = a.id_abonnement
+       WHERE a.id_abonnement = $1`,
+      [id]
     );
-    return rows;
+    return rows[0];
   }
 
-  static async souscrire({ id_client, id_offre, id_datacenter }) {
+  // B3 : souscription. Tout se fait dans une transaction : soit tout réussit, soit rien n'est enregistré
+  static async souscrire(idClient, idOffre, idDatacenter) {
     const conn = await pool.connect();
     try {
       await conn.query("BEGIN");
 
-      const client = await conn.query("SELECT id_client FROM client WHERE id_client = $1", [id_client]);
-      if (client.rowCount === 0) throw new HttpError(404, "CLIENT_INTROUVABLE", "Client introuvable");
+      // 1. On vérifie que l'offre existe et qu'elle est en vente
+      const resultatOffre = await conn.query("SELECT * FROM offre WHERE id_offre = $1", [idOffre]);
+      const offre = resultatOffre.rows[0];
+      if (!offre) throw new HttpError(404, "Offre introuvable");
+      if (!offre.en_vente) throw new HttpError(422, "Cette offre n'est plus en vente");
 
-      const offreRes = await conn.query(
-        "SELECT id_offre, categorie, prix_mensuel_ht, en_vente FROM offre WHERE id_offre = $1",
-        [id_offre]
+      // 2. On crée l'abonnement avec le prix du catalogue (si le client n'existe pas, la clé étrangère refuse)
+      const resultatAbonnement = await conn.query(
+        "INSERT INTO abonnement (id_client, id_offre, prix_applique) VALUES ($1, $2, $3) RETURNING *",
+        [idClient, idOffre, offre.prix_mensuel_ht]
       );
-      const offre = offreRes.rows[0];
-      if (!offre) throw new HttpError(404, "OFFRE_INTROUVABLE", "Offre introuvable");
-      if (!offre.en_vente) throw new HttpError(422, "OFFRE_RETIREE", "Cette offre n'est plus en vente");
+      const abonnement = resultatAbonnement.rows[0];
 
-      const hebergement = offre.categorie !== "domaine";
-      if (hebergement && id_datacenter == null) {
-        throw new HttpError(422, "DATACENTER_REQUIS", "Un id_datacenter est obligatoire pour un hébergement");
-      }
+      // 3. Si c'est un hébergement (pas un nom de domaine), on attribue un serveur libre du datacenter demandé
+      if (offre.categorie !== "domaine") {
+        if (!idDatacenter) throw new HttpError(400, "id_datacenter est obligatoire pour un hébergement");
 
-      const insert = await conn.query(
-        `INSERT INTO abonnement (id_client, id_offre, prix_applique)
-         VALUES ($1, $2, $3)
-         RETURNING id_abonnement`,
-        [id_client, id_offre, offre.prix_mensuel_ht]
-      );
-      const idAbonnement = insert.rows[0].id_abonnement;
-
-      if (hebergement) {
-        const dc = await conn.query("SELECT id_datacenter FROM datacenter WHERE id_datacenter = $1", [id_datacenter]);
-        if (dc.rowCount === 0) throw new HttpError(404, "DATACENTER_INTROUVABLE", "Datacenter introuvable");
-
-        const libre = await conn.query(
-          `SELECT id_serveur
-           FROM serveur
-           WHERE id_datacenter = $1
-             AND statut = 'en_service'
-             AND id_abonnement IS NULL
-           ORDER BY id_serveur
-           LIMIT 1
-           FOR UPDATE SKIP LOCKED`,
-          [id_datacenter]
+        const resultatServeur = await conn.query(
+          `SELECT id_serveur, nom_hote FROM serveur
+           WHERE id_datacenter = $1 AND statut = 'en_service' AND id_abonnement IS NULL
+           LIMIT 1`,
+          [idDatacenter]
         );
-        if (libre.rowCount === 0) {
-          throw new HttpError(409, "AUCUN_SERVEUR_LIBRE", "Aucun serveur libre en service dans ce datacenter");
-        }
+        const serveur = resultatServeur.rows[0];
+        if (!serveur) throw new HttpError(409, "Aucun serveur libre dans ce datacenter");
 
         await conn.query("UPDATE serveur SET id_abonnement = $1 WHERE id_serveur = $2", [
-          idAbonnement,
-          libre.rows[0].id_serveur,
+          abonnement.id_abonnement,
+          serveur.id_serveur,
         ]);
+        abonnement.serveur = serveur.nom_hote;
       }
 
-      const abonnement = await Abonnement.findById(idAbonnement, conn);
       await conn.query("COMMIT");
       return abonnement;
     } catch (err) {
+      // Une erreur à n'importe quelle étape : on annule tout
       await conn.query("ROLLBACK");
       throw err;
     } finally {
@@ -91,43 +64,32 @@ class Abonnement {
     }
   }
 
+  // B4 : résiliation. Le statut et la date de fin changent, et le serveur redevient libre
   static async resilier(id) {
     const conn = await pool.connect();
     try {
       await conn.query("BEGIN");
 
-      const actuel = await conn.query(
-        "SELECT statut FROM abonnement WHERE id_abonnement = $1 FOR UPDATE",
-        [id]
-      );
-      if (actuel.rowCount === 0) throw new HttpError(404, "ABONNEMENT_INTROUVABLE", "Abonnement introuvable");
-      if (actuel.rows[0].statut === "resilie") {
-        throw new HttpError(409, "DEJA_RESILIE", "Cet abonnement est déjà résilié");
-      }
+      const resultat = await conn.query("SELECT statut FROM abonnement WHERE id_abonnement = $1", [id]);
+      const abonnement = resultat.rows[0];
+      if (!abonnement) throw new HttpError(404, "Abonnement introuvable");
+      if (abonnement.statut === "resilie") throw new HttpError(409, "Cet abonnement est déjà résilié");
 
       await conn.query(
-        `UPDATE abonnement
-         SET statut = 'resilie', date_fin = GREATEST(CURRENT_DATE, date_debut)
-         WHERE id_abonnement = $1`,
+        "UPDATE abonnement SET statut = 'resilie', date_fin = CURRENT_DATE WHERE id_abonnement = $1",
         [id]
       );
+      await conn.query("UPDATE serveur SET id_abonnement = NULL WHERE id_abonnement = $1", [id]);
 
-      const serveur = await conn.query(
-        `UPDATE serveur SET id_abonnement = NULL
-         WHERE id_abonnement = $1
-         RETURNING id_serveur, nom_hote`,
-        [id]
-      );
-
-      const abonnement = await Abonnement.findById(id, conn);
       await conn.query("COMMIT");
-      return { ...abonnement, serveur_libere: serveur.rows[0] ?? null };
     } catch (err) {
       await conn.query("ROLLBACK");
       throw err;
     } finally {
       conn.release();
     }
+
+    return Abonnement.findById(id);
   }
 
   // Chiffre d'affaires mensuel des abonnements actifs : total et par catégorie d'offre (B9)
