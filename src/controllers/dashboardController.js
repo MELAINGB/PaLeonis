@@ -1,14 +1,14 @@
-const Dashboard = require("../models/Dashboard");
+const Abonnement = require("../models/Abonnement");
+const Serveur = require("../models/Serveur");
 
 async function getDashboard(req, res, next) {
   try {
-    const total = await Dashboard.chiffreAffairesTotal();
-    const parCategorie = await Dashboard.chiffreAffairesParCategorie();
-    const serveurs = await Dashboard.serveursParDatacenter();
+    const chiffreAffaires = await Abonnement.getChiffreAffaires();
+    const serveurs = await Serveur.countParDatacenter();
 
     res.status(200).json({
-      chiffre_affaires_total: total,
-      chiffre_affaires_par_categorie: parCategorie,
+      chiffre_affaires_total: chiffreAffaires.total,
+      chiffre_affaires_par_categorie: chiffreAffaires.par_categorie,
       serveurs_par_datacenter: serveurs,
     });
   } catch (err) {

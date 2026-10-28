@@ -34,6 +34,18 @@ class Serveur {
     const { rows } = await pool.query("SELECT * FROM serveur WHERE id_serveur = $1", [id]);
     return rows[0];
   }
+
+  // Nombre de serveurs par datacenter et par statut (B9)
+  static async countParDatacenter() {
+    const { rows } = await pool.query(
+      `SELECT d.nom AS datacenter, s.statut, COUNT(*)::int AS nombre
+       FROM serveur s
+       JOIN datacenter d ON d.id_datacenter = s.id_datacenter
+       GROUP BY d.nom, s.statut
+       ORDER BY d.nom, s.statut`
+    );
+    return rows;
+  }
 }
 
 module.exports = Serveur;
